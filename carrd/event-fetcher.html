@@ -1,0 +1,228 @@
+<style>
+  #error-container {
+    display: none;
+  }
+
+  /* Disabled state for interactive elements */
+  [aria-disabled="true"] {
+    opacity: 0.25;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* Add smooth transition for nav and action buttons */
+  #event-nav-buttons a,
+  #event-add-to-calendar a,
+  #event-register-form button,
+  #event-container input {
+    transition: opacity 0.25s ease;
+  }
+
+  /* Disabled content state */
+  .content-disabled {
+    opacity: 0.25;
+  }
+</style>
+
+<script>
+  const baseUrl = "http://localhost:3000";
+  let events = [];
+  let currentEventIndex = 0;
+
+  // Core display functions
+  const disableAllInteractions = (container) => {
+    // Disable all buttons and links
+    container
+      .querySelectorAll("button, a, input")
+      .forEach((el) => el.setAttribute("aria-disabled", "true"));
+
+    // Disable nav buttons
+    document
+      .querySelectorAll("#event-nav-buttons a")
+      .forEach((el) => el.setAttribute("aria-disabled", "true"));
+
+    // Grey out content
+    container.classList.add("content-disabled");
+  };
+
+  const updateContent = (container, event) => {
+    const elements = {
+      title: container.querySelector("#event-title"),
+      date: container.querySelector("#event-date"),
+      time: container.querySelector("#event-time"),
+      location: container.querySelector("#event-location"),
+      description: container.querySelector("#event-description"),
+      submitButton: container.querySelector(
+        '#event-register-form button[type="submit"]'
+      ),
+      submitLabel: container.querySelector(
+        '#event-register-form button[type="submit"] .label'
+      ),
+      calendarLink: container.querySelector("#event-add-to-calendar a"),
+      eventIdInput: container.querySelector("#event-register-form-eventId"),
+    };
+
+    // Update text content
+    elements.title.textContent = event.eventTitle;
+    elements.date.textContent = formatDate(event.eventDate);
+    elements.time.textContent = `${formatTime(
+      event.eventStartTime
+    )} - ${formatTime(event.eventEndTime)}`;
+    elements.location.innerHTML = `<strong>Location:</strong> ${event.eventLocation}`;
+    elements.description.innerHTML = `<strong>Description:</strong> ${event.eventDescription}`;
+    elements.submitLabel.textContent = `Register for £${Number(
+      event.eventPrice
+    ).toFixed(2)}`;
+
+    // If no event ID, disable everything
+    if (!event.id) {
+      disableAllInteractions(container);
+    } else {
+      // Enable and update interactive elements
+      container
+        .querySelectorAll(".content-disabled")
+        .forEach((el) => el.classList.remove("content-disabled"));
+      container
+        .querySelectorAll("[aria-disabled]")
+        .forEach((el) => el.removeAttribute("aria-disabled"));
+
+      elements.calendarLink.href = `${baseUrl}/events/${event.id}`;
+      elements.eventIdInput.value = event.id;
+    }
+  };
+
+  const updateNavButtons = () => {
+    const prevButton = document.querySelector("#event-nav-buttons .n01");
+    const nextButton = document.querySelector("#event-nav-buttons .n02");
+
+    prevButton.setAttribute("aria-disabled", currentEventIndex === 0);
+    nextButton.setAttribute(
+      "aria-disabled",
+      currentEventIndex >= events.length - 1
+    );
+  };
+
+  // Format helpers
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const formatTime = (timeStr) => {
+    const [hours, minutes] = timeStr.split(":");
+    const date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes));
+    return date
+      .toLocaleTimeString("en-GB", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .toLowerCase();
+  };
+
+  // Event handlers
+  const handleError = (error) => {
+    const message = error.response
+      ? `${error.response.status} - ${error.response.statusText}`
+      : error.request
+      ? "Could not reach the server."
+      : error.message || "Unknown error occurred.";
+
+    document.getElementById(
+      "error-text"
+    ).textContent = `Error fetching events: ${message}`;
+    document.getElementById("error-container").style.display = "block";
+
+    // Disable all interactive elements
+    document
+      .querySelectorAll("button, a")
+      .forEach((el) => el.setAttribute("aria-disabled", "true"));
+    events = [];
+    currentEventIndex = 0;
+  };
+
+  const handleNavigation = (direction) => (e) => {
+    e.preventDefault();
+    if (e.currentTarget.getAttribute("aria-disabled") !== "false") return;
+
+    currentEventIndex += direction;
+
+    console.log(events, event[currentEventIndex]);
+    displayEvent(events[currentEventIndex]);
+    updateNavButtons();
+  };
+
+  // Main display function
+  const displayEvent = (event) => {
+    const container = document.getElementById("event-container");
+    if (!container) return;
+
+    try {
+      updateContent(container, event);
+    } catch (error) {
+      console.error("Error updating event display:", error);
+    }
+  };
+
+  // Add new function to update event select
+  const updateEventSelect = (events) => {
+    const select = document.querySelector("#delete-event-form-eventId");
+    if (!select) return;
+
+    // Clear existing options
+    select.innerHTML = "";
+
+    // Add default option
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Select an event";
+    defaultOption.selected = true;
+    defaultOption.disabled = true;
+    select.appendChild(defaultOption);
+
+    // Add event options
+    events.forEach((event) => {
+      const option = document.createElement("option");
+      option.value = event.id;
+      option.textContent = event.eventTitle;
+      select.appendChild(option);
+    });
+  };
+
+  // Initialize
+  document.addEventListener("DOMContentLoaded", () => {
+    document
+      .querySelector("#event-nav-buttons .n01")
+      .addEventListener("click", handleNavigation(-1));
+    document
+      .querySelector("#event-nav-buttons .n02")
+      .addEventListener("click", handleNavigation(1));
+
+    fetch(`${baseUrl}/events`)
+      .then((response) => {
+        if (!response.ok)
+          throw new Error(`${response.status} - ${response.statusText}`);
+        return response.json();
+      })
+      .then((data) => {
+        events = data;
+        if (events.length > 0) {
+          displayEvent(events[0]);
+          updateNavButtons();
+          updateEventSelect(events);
+        } else {
+          // If no events, disable everything
+          const container = document.getElementById("event-container");
+          if (container) {
+            disableAllInteractions(container);
+          }
+        }
+      })
+      .catch(handleError);
+  });
+</script>

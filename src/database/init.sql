@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    eventTitle TEXT NOT NULL,
+    eventDescription TEXT,
+    eventDate TEXT NOT NULL,
+    eventStartTime TEXT NOT NULL,
+    eventEndTime TEXT NOT NULL,
+    eventPrice DECIMAL(10,2) DEFAULT 0.00,
+    eventLocation TEXT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS rsvps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  eventId INTEGER NOT NULL,
+  rsvpName TEXT NOT NULL,
+  rsvpEmail TEXT NOT NULL,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (eventId) REFERENCES events(id)
+);
