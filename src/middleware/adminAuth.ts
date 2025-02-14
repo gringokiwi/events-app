@@ -15,3 +15,19 @@ export const validateAdminPin = (
 
   next();
 };
+
+export const validateAdminPassword = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const providedPassword = req.body.adminPassword ?? req.query.adminPassword;
+  const requiredPassword = process.env.ADMIN_PASSWORD;
+
+  if (!providedPassword || providedPassword.toString() !== requiredPassword) {
+    res.status(401).json({ error: "Unauthorized - Invalid Password" });
+    return;
+  }
+
+  next();
+};
