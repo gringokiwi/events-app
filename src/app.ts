@@ -314,12 +314,90 @@ app.post(
                 font-weight: bold;
                 margin: 20px 0;
               }
+              .invoice-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                margin: 16px auto;
+                max-width: 600px;
+              }
+              input {
+                flex: 1;
+                padding: 12px;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                font-size: 14px;
+                font-family: monospace;
+                width: 100%;
+                background: #f5f5f5;
+                cursor: text;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+              }
+              .copy-btn, .wallet-btn {
+                padding: 12px 16px;
+                border: none;
+                border-radius: 6px;
+                background: #007AFF;
+                color: white;
+                cursor: pointer;
+                font-size: 14px;
+                white-space: nowrap;
+                transition: background 0.2s;
+              }
+              .copy-btn:hover, .wallet-btn:hover {
+                background: #0056b3;
+              }
               .status {
                 color: #666;
                 margin: 10px 0;
               }
             </style>
             <script>
+              function copyToClipboard() {
+                const input = document.querySelector('input');
+                input.select();
+                document.execCommand('copy');
+                const copyBtn = document.querySelector('.copy-btn');
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                  copyBtn.textContent = 'Copy Invoice';
+                }, 2000);
+              }
+
+              async function openInWallet() {
+                // Try WebLN (browser wallets) first
+                if (window.webln) {
+                  try {
+                    await window.webln.enable();
+                    await window.webln.sendPayment('${qrCodeData}');
+                    return;
+                  } catch (e) {
+                    console.log('WebLN failed:', e);
+                  }
+                }
+
+                // Fallback to lightning: protocol (desktop wallets)
+                const hasDesktopWallet = await new Promise((resolve) => {
+                  const timeout = setTimeout(() => resolve(false), 100);
+                  window.addEventListener('blur', () => {
+                    clearTimeout(timeout);
+                    resolve(true);
+                  }, { once: true });
+                  window.location.href = 'lightning:${qrCodeData}';
+                });
+
+                // If no wallet handled the protocol, suggest installing one
+                if (!hasDesktopWallet) {
+                  const installWallet = confirm('No Lightning wallet detected. Would you like to install one?');
+                  if (installWallet) {
+                    window.open('https://getalby.com', '_blank');
+                  }
+                }
+              }
+
               // Check payment status every 5 seconds
               function checkPaymentStatus() {
                 fetch('/payment-status/${invoiceId}')
@@ -328,7 +406,11 @@ app.post(
                     if (data.paid && (${
                       process.env.CARRD_URL?.length ?? 0
                     } >= 1)) {
-                      window.location.href = '${process.env.CARRD_URL}';
+                      window.location.href = '${
+                        process.env.CARRD_URL
+                      }/?rsvp-success=true&event-id=${
+          validatedRsvpData.eventId
+        }';
                     }
                   });
               }
@@ -359,7 +441,12 @@ app.post(
             <div class="qr-container">
               <img src="${qrCodeImage}" alt="Payment QR Code">
             </div>
-            <p>Scan the QR code to complete your payment</p>
+            <p>Scan the QR code to complete your payment, or copy/paste this invoice into your wallet:</p>
+            <div class="invoice-container">
+              <input type="text" value="${qrCodeData}" readonly />
+              <button class="copy-btn" onclick="copyToClipboard()">Copy Invoice</button>
+              <button class="wallet-btn" onclick="openInWallet()">Open in Wallet</button>
+            </div>
             <p>After payment, your RSVP will be automatically confirmed</p>
             <div id="timer" class="status">Checking payment status...</div>
           </body>
@@ -374,7 +461,9 @@ app.post(
       await eventService.addRsvp(validatedRsvpData);
 
       if (process.env.CARRD_URL) {
-        res.redirect(process.env.CARRD_URL);
+        res.redirect(
+          `${process.env.CARRD_URL}/?rsvp-success=true&event-id=${validatedRsvpData.eventId}`
+        );
       } else {
         res.status(201).json({
           message: "RSVP submitted successfully",
@@ -405,7 +494,9 @@ app.post(
       const eventId = await eventService.addEvent(validatedEventData);
 
       if (process.env.CARRD_URL) {
-        res.redirect(process.env.CARRD_URL);
+        res.redirect(
+          `${process.env.CARRD_URL}?create-event-success=true&event-id=${eventId}`
+        );
       } else {
         res.status(201).json({
           message: "Event created successfully",
@@ -437,7 +528,9 @@ app.post(
       await eventService.deleteEvent(eventId);
 
       if (process.env.CARRD_URL) {
-        res.redirect(process.env.CARRD_URL);
+        res.redirect(
+          `${process.env.CARRD_URL}/?delete-event-success=true&event-id=${eventId}`
+        );
       } else {
         res.status(200).json({
           message: "Event deleted successfully",
