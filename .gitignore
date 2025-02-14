@@ -1,6 +1,3 @@
 node_modules/
 dist/
 .env
-*.sqlite
-*.sqlite3
-data/
