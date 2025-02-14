@@ -8,7 +8,10 @@ import db from "./database";
 import dotenv from "dotenv";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { validateAdminPin } from "./middleware/adminAuth";
+import {
+  validateAdminPassword,
+  validateAdminPin,
+} from "./middleware/adminAuth";
 import { RsvpSchema } from "./types/rsvp";
 import QRCode from "qrcode";
 import { Payment } from "./types/payment";
@@ -547,7 +550,7 @@ app.post(
 app.get(
   "/list-rsvps",
   adminLimiter,
-  validateAdminPin,
+  validateAdminPassword,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const rsvps = await eventService.getAllRsvpsWithEvents();
