@@ -61,15 +61,15 @@
     };
 
     // Update text content
-    elements.title.textContent = event.eventTitle;
-    elements.date.textContent = formatDate(event.eventDate);
+    elements.title.textContent = event.event_title;
+    elements.date.textContent = formatDate(event.event_date);
     elements.time.textContent = `${formatTime(
-      event.eventStartTime
-    )} - ${formatTime(event.eventEndTime)}`;
-    elements.location.innerHTML = `<strong>Location:</strong> ${event.eventLocation}`;
-    elements.description.innerHTML = `<strong>Description:</strong> ${event.eventDescription}`;
+      event.event_start_time
+    )} - ${formatTime(event.event_end_time)}`;
+    elements.location.innerHTML = `<strong>Location:</strong> ${event.event_location}`;
+    elements.description.innerHTML = `<strong>Description:</strong> ${event.event_description}`;
     elements.submitLabel.textContent = `Register for £${Number(
-      event.eventPrice
+      event.event_price
     ).toFixed(2)}`;
 
     // If no event ID, disable everything
@@ -204,7 +204,7 @@
     events.forEach((event) => {
       const option = document.createElement("option");
       option.value = event.id;
-      option.textContent = event.eventTitle;
+      option.textContent = event.event_title;
       select.appendChild(option);
     });
   };
@@ -221,12 +221,12 @@
 
     if (urlParams.get("rsvp-success") === "true" && currentEvent) {
       successContainer.style.display = "block";
-      successText.textContent = `Successfully RSVP'd to "${currentEvent.eventTitle}".`;
+      successText.textContent = `Successfully RSVP'd to "${currentEvent.event_title}".`;
     }
 
     if (urlParams.get("create-event-success") === "true") {
       successContainer.style.display = "block";
-      successText.textContent = `Added "${currentEvent.eventTitle}" to the calendar.`;
+      successText.textContent = `Added "${currentEvent.event_title}" to the calendar.`;
     }
 
     if (urlParams.get("delete-event-success") === "true") {
