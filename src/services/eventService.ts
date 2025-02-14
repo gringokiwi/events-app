@@ -1,91 +1,64 @@
-import { Database } from "sqlite3";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { Event, EventWithId } from "../types/event";
 import FormData from "form-data";
 import Mailgun from "mailgun.js";
 
 export class EventService {
-  constructor(private db: Database) {}
+  constructor(private supabase: SupabaseClient<any, "public", any>) {}
 
   async addEvent(event: Event): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const sql = `
-                INSERT INTO events (
-                    eventTitle,
-                    eventDescription,
-                    eventDate,
-                    eventStartTime,
-                    eventEndTime,
-                    eventPrice,
-                    eventLocation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            `;
+    const { data, error } = await this.supabase
+      .from("events")
+      .insert([
+        {
+          event_title: event.event_title,
+          event_description: event.event_description,
+          event_date: event.event_date,
+          event_start_time: event.event_start_time,
+          event_end_time: event.event_end_time,
+          event_price: event.event_price,
+          event_location: event.event_location,
+        },
+      ])
+      .select();
 
-      this.db.run(
-        sql,
-        [
-          event.eventTitle,
-          event.eventDescription,
-          event.eventDate,
-          event.eventStartTime,
-          event.eventEndTime,
-          event.eventPrice,
-          event.eventLocation,
-        ],
-        function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        }
-      );
-    });
+    if (error) throw error;
+    return data[0].id;
   }
 
   async getLatestEvents(limit: number = 10): Promise<EventWithId[]> {
-    return new Promise((resolve, reject) => {
-      const sql = `
-                SELECT * FROM events 
-                ORDER BY eventDate DESC, eventStartTime DESC 
-                LIMIT ?
-            `;
+    const { data, error } = await this.supabase
+      .from("events")
+      .select()
+      .order("event_date", { ascending: false })
+      .order("event_start_time", { ascending: false })
+      .limit(limit);
 
-      this.db.all(sql, [limit], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows as EventWithId[]);
-        }
-      });
-    });
+    if (error) throw error;
+    return data;
   }
 
   async deleteEvent(id: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run("DELETE FROM events WHERE id = ?", [id], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    const { error } = await this.supabase.from("events").delete().eq("id", id);
+
+    if (error) throw error;
   }
 
-  async getEventById(eventId: number): Promise<Event | null> {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        "SELECT * FROM events WHERE id = ?",
-        [eventId],
-        (err, row) => {
-          if (err) reject(err);
-          resolve((row as Event) || null);
-        }
-      );
-    });
+  async getEventById(event_id: number): Promise<Event | null> {
+    const { data, error } = await this.supabase
+      .from("events")
+      .select()
+      .eq("id", event_id)
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 
   async addRsvp(rsvpData: {
-    rsvpName: string;
-    rsvpEmail: string;
-    eventId: number;
+    rsvp_name: string;
+    rsvp_email: string;
+    event_id: number;
   }): Promise<number> {
     const mailgun = new Mailgun(FormData);
 
@@ -95,109 +68,86 @@ export class EventService {
     });
 
     try {
-      const eventData = await this.getEventById(rsvpData.eventId);
+      const eventData = await this.getEventById(rsvpData.event_id);
       const subject = `New RSVP for "${
-        eventData?.eventTitle ?? `EVENT_TITLE`
-      }" at ${eventData?.eventDate ?? `EVENT_DATE`}`;
+        eventData?.event_title ?? `EVENT_TITLE`
+      }" at ${eventData?.event_date ?? `EVENT_DATE`}`;
 
-      const data = await mg.messages.create(
-        process.env.MAILGUN_DOMAIN as string,
-        {
-          from: `Mailgun Sandbox <postmaster@${process.env.MAILGUN_DOMAIN}>`,
-          to: JSON.parse(process.env.MAILGUN_RECEIVERS as string),
-          subject,
-          html: `
+      await mg.messages.create(process.env.MAILGUN_DOMAIN as string, {
+        from: `Mailgun Sandbox <postmaster@${process.env.MAILGUN_DOMAIN}>`,
+        to: JSON.parse(process.env.MAILGUN_RECEIVERS as string),
+        subject,
+        html: `
             <p>${subject}:</p>
-            <p><strong>Name:</strong> ${rsvpData.rsvpName}</p>
-            <p><strong>Email:</strong> ${rsvpData.rsvpEmail}</p>
+            <p><strong>Name:</strong> ${rsvpData.rsvp_name}</p>
+            <p><strong>Email:</strong> ${rsvpData.rsvp_email}</p>
           `,
-        }
-      );
-
-      console.log(data); // logs response data
+      });
     } catch (error) {
-      console.log(error); //logs any error
+      console.log(error);
     }
 
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        `INSERT INTO rsvps (eventId, rsvpName, rsvpEmail) VALUES (?, ?, ?)`,
-        [rsvpData.eventId, rsvpData.rsvpName, rsvpData.rsvpEmail],
-        function (err) {
-          if (err) reject(err);
-          resolve(this.lastID);
-        }
-      );
-    });
+    const { data, error } = await this.supabase
+      .from("rsvps")
+      .insert([
+        {
+          event_id: rsvpData.event_id,
+          rsvp_name: rsvpData.rsvp_name,
+          rsvp_email: rsvpData.rsvp_email,
+        },
+      ])
+      .select();
+
+    if (error) throw error;
+
+    return data[0].id;
   }
 
-  async getAllRsvpsWithEvents(): Promise<
-    Array<{
-      eventId: number;
-      eventTitle: string;
-      eventDate: string;
-      rsvps: Array<{
-        rsvpName: string;
-        rsvpEmail: string;
-        createdAt: string;
-      }>;
-    }>
-  > {
-    return new Promise((resolve, reject) => {
-      this.db.all(
-        `
-        SELECT 
-          e.id as eventId,
-          e.eventTitle,
-          e.eventDate,
-          r.rsvpName,
-          r.rsvpEmail,
-          r.createdAt
-        FROM events e
-        LEFT JOIN rsvps r ON e.id = r.eventId
-        ORDER BY e.eventDate DESC, r.createdAt DESC
-      `,
-        [],
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
-          }
+  async getAllRsvpsWithEvents() {
+    const { data, error } = await this.supabase.from("rsvps").select(`
+        *,
+        events (
+          id,
+          event_title,
+          event_date
+        )
+      `);
 
-          // Group RSVPs by event
-          const eventMap = new Map();
+    if (error) throw error;
 
-          const typecastedRows = rows as unknown as {
-            eventId: number;
-            eventTitle: string;
-            eventDate: string;
-            rsvpName: string;
-            rsvpEmail: string;
-            createdAt: Date;
-          }[];
+    const eventMap = new Map<
+      number,
+      {
+        event_id: number;
+        event_title: string;
+        event_date: string;
+        rsvps: Array<{
+          rsvp_name: string;
+          rsvp_email: string;
+          created_at: string;
+        }>;
+      }
+    >();
 
-          typecastedRows.forEach((row) => {
-            if (!eventMap.has(row.eventId)) {
-              eventMap.set(row.eventId, {
-                eventId: row.eventId,
-                eventTitle: row.eventTitle,
-                eventDate: row.eventDate,
-                rsvps: [],
-              });
-            }
+    data.forEach((row) => {
+      const { events, ...rsvp } = row;
 
-            if (row.rsvpName && row.rsvpEmail) {
-              eventMap.get(row.eventId).rsvps.push({
-                rsvpName: row.rsvpName,
-                rsvpEmail: row.rsvpEmail,
-                createdAt: row.createdAt,
-              });
-            }
-          });
+      if (!eventMap.has(events.id)) {
+        eventMap.set(events.id, {
+          event_id: events.id,
+          event_title: events.event_title,
+          event_date: events.event_date,
+          rsvps: [],
+        });
+      }
 
-          resolve(Array.from(eventMap.values()));
-        }
-      );
+      eventMap.get(events.id)?.rsvps.push({
+        rsvp_name: rsvp.rsvp_name,
+        rsvp_email: rsvp.rsvp_email,
+        created_at: rsvp.created_at,
+      });
     });
+
+    return Array.from(eventMap.values());
   }
 }

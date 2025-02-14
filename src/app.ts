@@ -56,7 +56,7 @@ const payments = new Map<string, Payment>();
 
 // Function to generate a new invoice
 const generateInvoice = async (
-  eventPrice: number
+  event_price: number
 ): Promise<{
   invoiceId?: string;
   lnInvoice?: string;
@@ -71,7 +71,7 @@ const generateInvoice = async (
       throw new Error("Could not fetch Bitcoin price");
     }
 
-    const bitcoinAmount = eventPrice / bitcoinPrices?.data?.GBP;
+    const bitcoinAmount = event_price / bitcoinPrices?.data?.GBP;
 
     const authHeaders = {
       Authorization: `Bearer ${process.env.STRIKE_API_KEY}`,
@@ -154,24 +154,24 @@ app.get("/events", async (req: Request, res: Response, next: NextFunction) => {
 
 // Generate and download ICS file
 app.get(
-  "/events/:eventId",
+  "/events/:event_id",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const eventId = parseInt(req.params.eventId);
+      const event_id = parseInt(req.params.event_id);
 
-      if (isNaN(eventId)) {
+      if (isNaN(event_id)) {
         res.status(400).json({ error: "Invalid event ID" });
         return;
       }
 
-      const event = await eventService.getEventById(eventId);
+      const event = await eventService.getEventById(event_id);
 
       if (!event) {
         res.status(404).json({ error: "Event not found" });
         return;
       }
 
-      const startDate = new Date(event.eventDate);
+      const startDate = new Date(event.event_date);
       const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // Add 2 hours as default duration
 
       const icsEvent: EventAttributes = {
@@ -189,9 +189,9 @@ app.get(
           endDate.getHours(),
           endDate.getMinutes(),
         ],
-        title: event.eventTitle,
-        description: event.eventDescription,
-        location: event.eventLocation,
+        title: event.event_title,
+        description: event.event_description,
+        location: event.event_location,
         status: "CONFIRMED",
       };
 
@@ -204,7 +204,7 @@ app.get(
         res.set("Content-Type", "text/calendar");
         res.set(
           "Content-Disposition",
-          `attachment; filename=${event.eventTitle.replace(/\s+/g, "_")}.ics`
+          `attachment; filename=${event.event_title.replace(/\s+/g, "_")}.ics`
         );
         res.send(value);
       });
@@ -255,25 +255,25 @@ app.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const rsvpData = {
-        rsvpName: req.body.rsvpName,
-        rsvpEmail: req.body.rsvpEmail,
-        eventId: parseInt(req.body.eventId),
+        rsvp_name: req.body.rsvpName,
+        rsvp_email: req.body.rsvpEmail,
+        event_id: parseInt(req.body.eventId),
       };
 
       const validatedRsvpData = RsvpSchema.parse(rsvpData);
 
       // Check if event exists
-      const event = await eventService.getEventById(validatedRsvpData.eventId);
+      const event = await eventService.getEventById(validatedRsvpData.event_id);
 
       if (!event) {
         res.status(404).json({ error: "Event not found" });
         return;
       }
 
-      if (event.eventPrice > 0) {
+      if (event.event_price > 0) {
         // Generate invoice
         const { invoiceId, lnInvoice, error } = await generateInvoice(
-          event.eventPrice
+          event.event_price
         );
 
         if (error || !invoiceId || !lnInvoice) {
@@ -286,7 +286,7 @@ app.post(
         // Store payment information
         payments.set(invoiceId, {
           id: invoiceId,
-          amount: event.eventPrice,
+          amount: event.event_price,
           rsvpData: validatedRsvpData,
           paid: false,
           created: new Date(),
@@ -412,7 +412,7 @@ app.post(
                       window.location.href = '${
                         process.env.CARRD_URL
                       }/?rsvp-success=true&event-id=${
-          validatedRsvpData.eventId
+          validatedRsvpData.event_id
         }';
                     }
                   });
@@ -440,7 +440,7 @@ app.post(
           </head>
           <body>
             <h1>Payment Required</h1>
-            <div class="amount">£${event.eventPrice.toFixed(2)}</div>
+            <div class="amount">£${event.event_price.toFixed(2)}</div>
             <div class="qr-container">
               <img src="${qrCodeImage}" alt="Payment QR Code">
             </div>
@@ -465,7 +465,7 @@ app.post(
 
       if (process.env.CARRD_URL) {
         res.redirect(
-          `${process.env.CARRD_URL}/?rsvp-success=true&event-id=${validatedRsvpData.eventId}`
+          `${process.env.CARRD_URL}/?rsvp-success=true&event-id=${validatedRsvpData.event_id}`
         );
       } else {
         res.status(201).json({
@@ -488,22 +488,26 @@ app.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const eventData = {
-        ...req.body,
-        eventPrice: Number(req.body.eventPrice),
+        event_title: req.body.eventTitle,
+        event_date: req.body.eventDate,
+        event_start_time: req.body.eventStartTime,
+        event_end_time: req.body.eventEndTime,
+        event_location: req.body.eventLocation,
+        event_description: req.body.eventDescription,
+        event_price: Number(req.body.eventPrice),
       };
-      delete eventData.adminPIN;
 
       const validatedEventData = EventSchema.parse(eventData);
-      const eventId = await eventService.addEvent(validatedEventData);
+      const event_id = await eventService.addEvent(validatedEventData);
 
       if (process.env.CARRD_URL) {
         res.redirect(
-          `${process.env.CARRD_URL}?create-event-success=true&event-id=${eventId}`
+          `${process.env.CARRD_URL}?create-event-success=true&event-id=${event_id}`
         );
       } else {
         res.status(201).json({
           message: "Event created successfully",
-          eventId,
+          event_id,
           event: validatedEventData,
         });
       }
@@ -521,23 +525,23 @@ app.post(
   validateAdminPin,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const eventId = parseInt(req.body.eventId);
+      const event_id = parseInt(req.body.eventId);
 
-      if (isNaN(eventId)) {
+      if (isNaN(event_id)) {
         res.status(400).json({ error: "Invalid event ID" });
         return;
       }
 
-      await eventService.deleteEvent(eventId);
+      await eventService.deleteEvent(event_id);
 
       if (process.env.CARRD_URL) {
         res.redirect(
-          `${process.env.CARRD_URL}/?delete-event-success=true&event-id=${eventId}`
+          `${process.env.CARRD_URL}/?delete-event-success=true&event-id=${event_id}`
         );
       } else {
         res.status(200).json({
           message: "Event deleted successfully",
-          eventId,
+          event_id,
         });
       }
     } catch (error) {
@@ -581,8 +585,8 @@ app.get(
               .map(
                 (event) => `
               <div class="event-group">
-                <h2>${event.eventTitle} - ${new Date(
-                  event.eventDate
+                <h2>${event.event_title} - ${new Date(
+                  event.event_date
                 ).toLocaleDateString("en-GB", {
                   day: "numeric",
                   month: "short",
@@ -595,8 +599,8 @@ app.get(
                         .map(
                           (rsvp) => `
                     <div class="rsvp-item">
-                      ${rsvp.rsvpName} (${rsvp.rsvpEmail}) - ${new Date(
-                            rsvp.createdAt
+                      ${rsvp.rsvp_name} (${rsvp.rsvp_email}) - ${new Date(
+                            rsvp.created_at
                           ).toLocaleDateString("en-GB", {
                             day: "numeric",
                             month: "short",
@@ -627,7 +631,7 @@ app.use(errorHandler);
 
 // Handle cleanup on shutdown
 process.on("SIGINT", () => {
-    process.exit(0);
+  process.exit(0);
 });
 
 export default app;
