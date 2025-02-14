@@ -1,10 +1,12 @@
 <style>
-  #error-container {
+  #error-container,
+  #success-container {
     display: none;
   }
 
   /* Disabled state for interactive elements */
-  [aria-disabled="true"] {
+  [aria-disabled="true"],
+  .content-disabled {
     opacity: 0.25;
     cursor: default;
     pointer-events: none;
@@ -17,17 +19,13 @@
   #event-container input {
     transition: opacity 0.25s ease;
   }
-
-  /* Disabled content state */
-  .content-disabled {
-    opacity: 0.25;
-  }
 </style>
 
 <script>
   const baseUrl = "http://localhost:3000";
   let events = [];
   let currentEventIndex = 0;
+  let deeplinkProcessed = false;
 
   // Core display functions
   const disableAllInteractions = (container) => {
@@ -95,11 +93,17 @@
     const prevButton = document.querySelector("#event-nav-buttons .n01");
     const nextButton = document.querySelector("#event-nav-buttons .n02");
 
-    prevButton.setAttribute("aria-disabled", currentEventIndex === 0);
-    nextButton.setAttribute(
-      "aria-disabled",
-      currentEventIndex >= events.length - 1
-    );
+    if (currentEventIndex === 0) {
+      prevButton.setAttribute("aria-disabled", true);
+    } else {
+      prevButton.removeAttribute("aria-disabled");
+    }
+
+    if (currentEventIndex >= events.length - 1) {
+      nextButton.setAttribute("aria-disabled", true);
+    } else {
+      nextButton.removeAttribute("aria-disabled");
+    }
   };
 
   // Format helpers
@@ -146,13 +150,24 @@
     currentEventIndex = 0;
   };
 
-  const handleNavigation = (direction) => (e) => {
+  const handleNavigation = (e, direction) => {
     e.preventDefault();
-    if (e.currentTarget.getAttribute("aria-disabled") !== "false") return;
+    e.stopPropagation();
+
+    // Check if the button is disabled
+    if (e.currentTarget.hasAttribute("aria-disabled")) return;
 
     currentEventIndex += direction;
 
-    console.log(events, event[currentEventIndex]);
+    // Ensure currentEventIndex stays within bounds
+    currentEventIndex = Math.max(
+      0,
+      Math.min(currentEventIndex, events.length - 1)
+    );
+
+    console.log("Current index:", currentEventIndex);
+    console.log("Current event:", events[currentEventIndex]);
+
     displayEvent(events[currentEventIndex]);
     updateNavButtons();
   };
@@ -194,14 +209,59 @@
     });
   };
 
+  const handleSuccessMessages = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const successContainer = document.getElementById("success-container");
+    const successText = document.getElementById("success-text");
+
+    const eventId = urlParams.get("event-id");
+    const currentEvent = events.filter(
+      (event) => event.id === Number(eventId)
+    )[0];
+
+    if (urlParams.get("rsvp-success") === "true" && currentEvent) {
+      successContainer.style.display = "block";
+      successText.textContent = `Successfully RSVP'd to "${currentEvent.eventTitle}".`;
+    }
+
+    if (urlParams.get("create-event-success") === "true") {
+      successContainer.style.display = "block";
+      successText.textContent = `Added "${currentEvent.eventTitle}" to the calendar.`;
+    }
+
+    if (urlParams.get("delete-event-success") === "true") {
+      successContainer.style.display = "block";
+      successText.textContent = `Deleted event #${eventId} from the calendar.`;
+    }
+
+    setTimeout(() => {
+      successContainer.style.display = "none";
+    }, 5000);
+  };
+
+  const handleDeeplink = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const eventId = urlParams.get("event-id");
+    const currentEvent = events.filter(
+      (event) => event.id === Number(eventId)
+    )[0];
+
+    if (currentEvent && !deeplinkProcessed) {
+      displayEvent(currentEvent);
+    } else {
+      displayEvent(events[0]);
+    }
+  };
+
   // Initialize
   document.addEventListener("DOMContentLoaded", () => {
     document
       .querySelector("#event-nav-buttons .n01")
-      .addEventListener("click", handleNavigation(-1));
+      .addEventListener("click", (e) => handleNavigation(e, -1));
     document
       .querySelector("#event-nav-buttons .n02")
-      .addEventListener("click", handleNavigation(1));
+      .addEventListener("click", (e) => handleNavigation(e, 1));
 
     fetch(`${baseUrl}/events`)
       .then((response) => {
@@ -212,9 +272,11 @@
       .then((data) => {
         events = data;
         if (events.length > 0) {
-          displayEvent(events[0]);
+          console.log("Fetched events:", events);
           updateNavButtons();
           updateEventSelect(events);
+          handleSuccessMessages();
+          handleDeeplink();
         } else {
           // If no events, disable everything
           const container = document.getElementById("event-container");
