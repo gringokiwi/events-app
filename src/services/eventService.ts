@@ -101,13 +101,13 @@ export class EventService {
       }" at ${eventData?.eventDate ?? `EVENT_DATE`}`;
 
       const data = await mg.messages.create(
-        "sandbox3155c0c393544ec89a5f57b8e7e0bec0.mailgun.org",
+        process.env.MAILGUN_DOMAIN as string,
         {
-          from: "Mailgun Sandbox <postmaster@sandbox3155c0c393544ec89a5f57b8e7e0bec0.mailgun.org>",
-          to: ["James Scaur <james@txbatch.com>"],
+          from: `Mailgun Sandbox <postmaster@${process.env.MAILGUN_DOMAIN}>`,
+          to: JSON.parse(process.env.MAILGUN_RECEIVERS as string),
           subject,
           html: `
-            <p>${subject}</p>
+            <p>${subject}:</p>
             <p><strong>Name:</strong> ${rsvpData.rsvpName}</p>
             <p><strong>Email:</strong> ${rsvpData.rsvpEmail}</p>
           `,
