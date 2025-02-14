@@ -4,7 +4,7 @@ import { EventService } from "./services/eventService";
 import { errorHandler } from "./middleware/errorHandler";
 import { createEvent, EventAttributes } from "ics";
 import multer from "multer";
-import db from "./database";
+import supabase from "./database";
 import dotenv from "dotenv";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -20,7 +20,7 @@ import axios from "axios";
 dotenv.config();
 
 const app: Application = express();
-const eventService = new EventService(db);
+const eventService = new EventService(supabase);
 const upload = multer(); // Initialize multer
 
 // Rate limiter configuration
@@ -627,14 +627,7 @@ app.use(errorHandler);
 
 // Handle cleanup on shutdown
 process.on("SIGINT", () => {
-  db.close((err) => {
-    if (err) {
-      console.error("Error closing database:", err);
-    } else {
-      console.log("Database connection closed");
-    }
     process.exit(0);
-  });
 });
 
 export default app;
