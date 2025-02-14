@@ -1,27 +1,11 @@
-import sqlite3 from "sqlite3";
-import fs from "fs";
-import path from "path";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 
-// Ensure database directory exists
-const dbDir = path.join(__dirname, "../data");
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir);
-}
+dotenv.config();
 
-const db = new sqlite3.Database(path.join(dbDir, "events.db"));
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL as string;
+const supabaseKey = process.env.SUPABASE_KEY as string;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Initialize database tables
-const initSQL = fs.readFileSync(
-  path.join(__dirname, "database/init.sql"),
-  "utf-8"
-);
-
-db.exec(initSQL, (err) => {
-  if (err) {
-    console.error("Error initializing database:", err);
-  } else {
-    console.log("Database initialized successfully");
-  }
-});
-
-export default db;
+export default supabase;
